@@ -1,21 +1,22 @@
-CREATE OR REPLACE PACKAGE cwf_audit 
+CREATE OR REPLACE PACKAGE custom_audit 
 authid current_user -- required by audit_create_triggers
 as
 
   /******************************************************************************
-     name:       cwf_audit
+     name:       custom_audit
      purpose:    inserts, update, delete registration
   
      revisions:
      ver        date        author           description
      ---------  ----------  ---------------  ------------------------------------
      1.0        2010-04-06  Maciej Szymczak  created this package
+     2.0        2017-01-16  Maciej Szymczak  updates
   ******************************************************************************/
 
 
-   -- This procedures create/drop audit triggers for all tables CWF_T% and CWF_D%
+   -- This procedures create/drop audit triggers for all tables custom_T% and custom_D%
    
-   --begin cwf_audit.audit_drop_triggers; cwf_audit.audit_create_triggers; end;
+   --begin custom_audit.audit_drop_triggers; custom_audit.audit_create_triggers; end;
    procedure audit_drop_triggers;
    procedure audit_create_triggers;
   
@@ -25,7 +26,7 @@ as
    --
            CREATE OR REPLACE TRIGGER CWDATA.audit_AINT_t 
            before insert or update or delete
-           on CWDATA.CWF_T_APPLICATION_HEADERS
+           on CWDATA.custom_T_APPLICATION_HEADERS
            referencing new as new old as old
            for each row
            declare
@@ -37,13 +38,13 @@ as
               when updating  then currentOperation := 'UPDATE';
               when deleting  then currentOperation := 'DELETE';
             end case;
-            cwf_audit.audit_init(nvl(:new.id,:old.id), 'CWDATA','CWF_T_APPLICATION_HEADERS',currentOperation);
-            cwf_audit.audit_insert('APPLICATION_DATE',:old.APPLICATION_DATE,:new.APPLICATION_DATE);
-            cwf_audit.audit_insert('APPL_REG_DATE',:old.APPL_REG_DATE,:new.APPL_REG_DATE);
-            cwf_audit.audit_insert('BROK_REG_DATE',:old.BROK_REG_DATE,:new.BROK_REG_DATE);
-            cwf_audit.audit_insert('APPLICATION_NUMBER',:old.APPLICATION_NUMBER,:new.APPLICATION_NUMBER);
-            cwf_audit.audit_insert('TOTAL_AMOUNT',:old.TOTAL_AMOUNT,:new.TOTAL_AMOUNT);
-            cwf_audit.audit_insert('PRODUCTS_COUNT',:old.PRODUCTS_COUNT,:new.PRODUCTS_COUNT);
+            custom_audit.audit_init(nvl(:new.id,:old.id), 'CWDATA','custom_T_APPLICATION_HEADERS',currentOperation);
+            custom_audit.audit_insert('APPLICATION_DATE',:old.APPLICATION_DATE,:new.APPLICATION_DATE);
+            custom_audit.audit_insert('APPL_REG_DATE',:old.APPL_REG_DATE,:new.APPL_REG_DATE);
+            custom_audit.audit_insert('BROK_REG_DATE',:old.BROK_REG_DATE,:new.BROK_REG_DATE);
+            custom_audit.audit_insert('APPLICATION_NUMBER',:old.APPLICATION_NUMBER,:new.APPLICATION_NUMBER);
+            custom_audit.audit_insert('TOTAL_AMOUNT',:old.TOTAL_AMOUNT,:new.TOTAL_AMOUNT);
+            custom_audit.audit_insert('PRODUCTS_COUNT',:old.PRODUCTS_COUNT,:new.PRODUCTS_COUNT);
            end;
            
    NOTE, that information saved in fields ginitiator_login, ginitiator_id is wrong during operation DELETE (trigger has no info about the user).
@@ -52,7 +53,7 @@ as
    --
    Audit table structure is
    --
-           create sequence cwf_main_seq;
+           create sequence custom_main_seq;
            create sequence audit_transaction_id_s;
            CREATE TABLE AUDIT_DATA
            (
@@ -104,12 +105,13 @@ as
       ,pold_value             varchar2
       ,pnew_value             varchar2
    );
-    
- end cwf_audit;
+  function getTableAlias ( pOwner varchar2,  pTableName varchar2, no_data_found_exception varchar2 default 'Y') return varchar2;
+   
+ end custom_audit;
 /
 
 
-CREATE OR REPLACE PACKAGE BODY cwf_audit  as 
+CREATE OR REPLACE PACKAGE BODY custom_audit  as 
 
   gsource_id             number;                  
   gsource_schema_name    varchar2(30);       
@@ -152,13 +154,13 @@ CREATE OR REPLACE PACKAGE BODY cwf_audit  as
  insert into audit_data (id, source_id, source_schema_name, source_table_name
                        , source_column_name, source_value_context, old_value, new_value
                        , operation_type, operation_time, initiator_ip, initiator_login, sessionid, transaction_id )
-   values (cwf_main_seq.nextval, gsource_id, gsource_schema_name, gsource_table_name
+   values (custom_main_seq.nextval, gsource_id, gsource_schema_name, gsource_table_name
                        , psource_column_name, null, pold_value, pnew_value
                        , goperation_type, localtimestamp, ginitiator_ip, ginitiator_login, userenv('SESSIONID'), gtransaction_id );
  end;      
- 
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------- 
 procedure audit_create_triggers is
- 
  sqlStatement varchar2(32000);    
  cols varchar2(32000);    
 begin
@@ -169,34 +171,34 @@ begin
      select count(*)
      into r
      from
-     ( select cwf_tools.getTableAlias(owner,table_name) table_alias, count(*)
-         from all_tables where owner = 'CWDATA' and ( table_name like 'CWF_T%' or table_name like 'CWF_D%' )
-          and table_name not in ('CWF_T_GENDOC_REQUESTS','CWF_T_TEST_TOOL_RESULTS','CWF_D_DOSSIER_RANGE','CWF_T_RHK_XML')
-       group by cwf_tools.getTableAlias(owner,table_name)
+     ( select custom_audit.getTableAlias(owner,table_name) table_alias, count(*)
+         from all_tables where owner = 'CWDATA' and ( table_name like 'custom_T%' or table_name like 'custom_D%' )
+          and table_name not in ('custom_T_GENDOC_REQUESTS','custom_T_TEST_TOOL_RESULTS','custom_D_DOSSIER_RANGE','custom_T_RHK_XML')
+       group by custom_audit.getTableAlias(owner,table_name)
        having count(*)>1 );
   if r > 0 then raise_application_error(-20000, 'Nonunique table aliases !'); end if;    
-  --select table_name, cwf_tools.getTableAlias(owner,table_name) table_alias  from all_tables where owner = 'CWDATA' and ( table_name like 'CWF_T%' or table_name like 'CWF_D%' )
-  --and cwf_tools.getTableAlias(owner,table_name) in ('ADDRESS','AINT')
+  --select table_name, custom_audit.getTableAlias(owner,table_name) table_alias  from all_tables where owner = 'CWDATA' and ( table_name like 'custom_T%' or table_name like 'custom_D%' )
+  --and custom_audit.getTableAlias(owner,table_name) in ('ADDRESS','AINT')
  end;    
  for rec in (
     select owner
         ,  table_name
-        ,  cwf_tools.getTableAlias(owner,table_name) table_alias
+        ,  custom_audit.getTableAlias(owner,table_name) table_alias
     from all_tables x
-   where owner = 'CWDATA' and ( table_name like 'CWF_T%' or table_name like 'CWF_D%' )
-     and table_name not in ('CWF_T_GENDOC_REQUESTS','CWF_T_TEST_TOOL_RESULTS','CWF_D_DOSSIER_RANGE','CWF_T_RHK_XML')
+   where owner = 'CWDATA' and ( table_name like 'custom_T%' or table_name like 'custom_D%' )
+     and table_name not in ('custom_T_GENDOC_REQUESTS','custom_T_TEST_TOOL_RESULTS','custom_D_DOSSIER_RANGE','custom_T_RHK_XML')
      and exists ( select 1 from all_tab_cols where owner = x.owner and table_name = x.table_name and column_name = 'ID' ) 
-      --and table_name = 'CWF_D_EXCHANGE_RATES'
+      --and table_name = 'custom_D_EXCHANGE_RATES'
      )
  loop
   sqlStatement := 
-  'create or replace trigger '||rec.owner||'.cwf_audit_'||rec.table_alias||'_t '||chr(10)||
+  'create or replace trigger '||rec.owner||'.custom_audit_'||rec.table_alias||'_t '||chr(10)||
   'after insert or update or delete'||chr(10)|| 
   'on '||rec.owner||'.'||rec.table_name||chr(10)|| 
   'referencing new as new old as old'||chr(10)|| 
   'for each row'||chr(10)||
   'declare'||chr(10)||
-  '  --2010.03.31 Maciej Szymczak, audit data mechanism, do not change this trigger manually. Instead of this, run cwf_audit.audit_create_triggers procedure'||chr(10)||
+  '  --2010.03.31 Maciej Szymczak, audit data mechanism, do not change this trigger manually. Instead of this, run custom_audit.audit_create_triggers procedure'||chr(10)||
   '  currentOperation varchar2(10);'||chr(10)||
   'begin'||chr(10)|| 
   ' case'||chr(10)|| 
@@ -204,11 +206,11 @@ begin
   '   when updating  then currentOperation := ''UPDATE'';'||chr(10)||
   '   when deleting  then currentOperation := ''DELETE'';'||chr(10)||
   ' end case;'||chr(10)||
-  ' cwf_audit.audit_init(nvl(:new.id,:old.id), '''||rec.owner||''','''||rec.table_name||''',currentOperation,  nvl(:new.last_updated_by_ip,:old.last_updated_by_ip), nvl(:new.last_updated_by_login,:old.last_updated_by_login));'||chr(10);
+  ' custom_audit.audit_init(nvl(:new.id,:old.id), '''||rec.owner||''','''||rec.table_name||''',currentOperation,  nvl(:new.last_updated_by_ip,:old.last_updated_by_ip), nvl(:new.last_updated_by_login,:old.last_updated_by_login));'||chr(10);
   cols := null;
   for rec2 in ( select column_name from all_tab_cols where owner = rec.owner and table_name = rec.table_name and virtual_column = 'NO' and column_name not in ('ID', 'CREATED_BY_LOGIN', 'CREATED_BY_IP', 'CREATION_DATE', 'LAST_UPDATED_BY_LOGIN', 'LAST_UPDATED_BY_IP', 'LAST_UPDATE_DATE') order by column_id )
   loop
-      cols := cols || ' cwf_audit.audit_insert('''||rec2.column_name||''',:old.'||rec2.column_name||',:new.'||rec2.column_name||');'||chr(10);
+      cols := cols || ' custom_audit.audit_insert('''||rec2.column_name||''',:old.'||rec2.column_name||',:new.'||rec2.column_name||');'||chr(10);
   end loop;
   sqlStatement := sqlStatement || cols || 'end;';
   begin
@@ -220,6 +222,7 @@ begin
 end loop;
 end;
                  
+--------------------------------------------------------------------------------------------------------------------------------------------------
 procedure audit_drop_triggers is
  sqlStatement varchar2(32000);    
 begin
@@ -227,16 +230,16 @@ begin
  for rec in (
     select owner
         ,  table_name
-        ,  cwf_tools.getTableAlias(owner,table_name) table_alias
+        ,  custom_audit.getTableAlias(owner,table_name) table_alias
     from all_tables x
-   where owner = 'CWDATA' and ( table_name like 'CWF_T%' or table_name like 'CWF_D%' )
-     and table_name not in ('CWF_T_GENDOC_REQUESTS','CWF_T_TEST_TOOL_RESULTS','CWF_D_DOSSIER_RANGE','CWF_T_RHK_XML')
+   where owner = 'LFPROD' and ( table_name like 'custom_T%' or table_name like 'custom_D%' )
+     and table_name not in ('T_GENDOC_REQUESTS')
      and exists ( select 1 from all_tab_cols where owner = x.owner and table_name = x.table_name and column_name = 'ID' ) 
-      --and table_name = 'CWF_D_EXCHANGE_RATES'
+      --and table_name = 'EXCHANGE_RATES'
      )
  loop
   sqlStatement := 
-  'drop trigger '||rec.owner||'.cwf_audit_'||rec.table_alias||'_t ';
+  'drop trigger '||rec.owner||'.custom_audit_'||rec.table_alias||'_t ';
   begin
     execute immediate sqlStatement;
   exception
@@ -248,6 +251,40 @@ end loop;
 end;
 
 
-end cwf_audit;
+ ---------------------------------------------------------------------------------------------------------------------------------------------------------
+   function extractWord  (poz number, words varchar, sep varchar := '|') return varchar is
+     word varchar2(5000):='';
+     word2 varchar2(5000);
+     str2 varchar2(5000):= words || sep;
+   begin
+     for i in 1..poz loop
+      if i = 1 then
+       word:=SUBSTR(str2,1,INSTR(str2,sep,poz)-1);
+       word2:=str2;
+      else
+       word2 := SUBSTR(word2,LENGTH(word2)+2-LENGTH(SUBSTR(word2,INSTR(word2,sep,1))));
+       word  := SUBSTR(word2,1,INSTR(word2,sep,1)-1);
+      end if;
+     end loop;
+     return Word;
+   end;
+   
+ ---------------------------------------------------------------------------------------------------------------------------------------------------------
+ function getTableAlias ( pOwner varchar2, pTableName varchar2, no_data_found_exception varchar2 default 'Y' ) return varchar2 is
+  res varchar2(100);
+ begin
+   select unique trim(custom_audit.extractWord(3, comments, '=')) alias
+    into res
+   from all_tab_comments where owner = pOwner
+    and  trim(custom_audit.extractWord(3, comments, '=')) is not null
+    and table_name = pTableName;
+   return res;
+ exception
+   when others then
+     if no_data_found_exception = 'Y' then raise_application_error(-20000, ' getTableAlias for "'||pTableName||'" caused an error:' || sqlerrm ); end if;
+     return null;
+ end;
+
+end custom_audit;
 /
 
