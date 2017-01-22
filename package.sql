@@ -1,4 +1,4 @@
-CREATE OR REPLACE PACKAGE custom_audit 
+create or replace PACKAGE custom_audit 
 authid current_user -- required by audit_create_triggers
 as
 
@@ -91,7 +91,7 @@ as
    ---------------------------------------------------------------------------------------------------------------------------------------------------------
    -- used by audit triggers
    procedure audit_init
-    (psource_id             number                  
+    (psource_id             varchar2                  
     ,psource_schema_name    varchar2       
     ,psource_table_name     varchar2       
     ,poperation_type        varchar2
@@ -106,14 +106,15 @@ as
       ,pnew_value             varchar2
    );
   function getTableAlias ( pOwner varchar2,  pTableName varchar2, no_data_found_exception varchar2 default 'Y') return varchar2;
-   
+  function extractWord  (poz number, words varchar, sep varchar := '|') return varchar;
+  
  end custom_audit;
 /
 
 
-CREATE OR REPLACE PACKAGE BODY custom_audit  as 
+create or replace PACKAGE BODY custom_audit  as 
 
-  gsource_id             number;                  
+  gsource_id             varchar2(15);                  
   gsource_schema_name    varchar2(30);       
   gsource_table_name     varchar2(30);       
   goperation_type        varchar2(10);       
@@ -123,7 +124,7 @@ CREATE OR REPLACE PACKAGE BODY custom_audit  as
 
  ---------------------------------------------------------------------------------------------------------------------------------------------------------
  procedure audit_init
-    (psource_id             number                  
+    (psource_id             varchar2                  
     ,psource_schema_name    varchar2       
     ,psource_table_name     varchar2       
     ,poperation_type        varchar2
@@ -172,8 +173,8 @@ begin
      into r
      from
      ( select custom_audit.getTableAlias(owner,table_name) table_alias, count(*)
-         from all_tables where owner = 'CWDATA' and ( table_name like 'custom_T%' or table_name like 'custom_D%' )
-          and table_name not in ('custom_T_GENDOC_REQUESTS','custom_T_TEST_TOOL_RESULTS','custom_D_DOSSIER_RANGE','custom_T_RHK_XML')
+         from all_tables
+         where owner = 'LFPROD' and  table_name like 'DM%' and  table_name not like 'DM_TMP%' and table_name not in ('DM_PLANNINGPERIODS','DM_PLANNINGPERIODS_H','DM_DELETEME')
        group by custom_audit.getTableAlias(owner,table_name)
        having count(*)>1 );
   if r > 0 then raise_application_error(-20000, 'Nonunique table aliases !'); end if;    
@@ -185,8 +186,7 @@ begin
         ,  table_name
         ,  custom_audit.getTableAlias(owner,table_name) table_alias
     from all_tables x
-   where owner = 'CWDATA' and ( table_name like 'custom_T%' or table_name like 'custom_D%' )
-     and table_name not in ('custom_T_GENDOC_REQUESTS','custom_T_TEST_TOOL_RESULTS','custom_D_DOSSIER_RANGE','custom_T_RHK_XML')
+    where owner = 'LFPROD' and  table_name like 'DM%' and  table_name not like 'DM_TMP%'  and table_name not in ('DM_PLANNINGPERIODS','DM_PLANNINGPERIODS_H','DM_DELETEME')
      and exists ( select 1 from all_tab_cols where owner = x.owner and table_name = x.table_name and column_name = 'ID' ) 
       --and table_name = 'custom_D_EXCHANGE_RATES'
      )
@@ -198,7 +198,7 @@ begin
   'referencing new as new old as old'||chr(10)|| 
   'for each row'||chr(10)||
   'declare'||chr(10)||
-  '  --2010.03.31 Maciej Szymczak, audit data mechanism, do not change this trigger manually. Instead of this, run custom_audit.audit_create_triggers procedure'||chr(10)||
+  '  -- @author Maciej Szymczak, audit data mechanism, do not change this trigger manually. Instead of this, run custom_audit.audit_create_triggers '||chr(10)||
   '  currentOperation varchar2(10);'||chr(10)||
   'begin'||chr(10)|| 
   ' case'||chr(10)|| 
@@ -206,9 +206,9 @@ begin
   '   when updating  then currentOperation := ''UPDATE'';'||chr(10)||
   '   when deleting  then currentOperation := ''DELETE'';'||chr(10)||
   ' end case;'||chr(10)||
-  ' custom_audit.audit_init(nvl(:new.id,:old.id), '''||rec.owner||''','''||rec.table_name||''',currentOperation,  nvl(:new.last_updated_by_ip,:old.last_updated_by_ip), nvl(:new.last_updated_by_login,:old.last_updated_by_login));'||chr(10);
+  ' custom_audit.audit_init(nvl(:new.id,:old.id), '''||rec.owner||''','''||rec.table_name||''',currentOperation,  nvl(null,null), nvl(:new.LASTMODIFIEDBYID,:old.LASTMODIFIEDBYID));'||chr(10);
   cols := null;
-  for rec2 in ( select column_name from all_tab_cols where owner = rec.owner and table_name = rec.table_name and virtual_column = 'NO' and column_name not in ('ID', 'CREATED_BY_LOGIN', 'CREATED_BY_IP', 'CREATION_DATE', 'LAST_UPDATED_BY_LOGIN', 'LAST_UPDATED_BY_IP', 'LAST_UPDATE_DATE') order by column_id )
+  for rec2 in ( select column_name from all_tab_cols where owner = rec.owner and table_name = rec.table_name and virtual_column = 'NO' and column_name not in ('ID', 'CREATEDDATE', 'CREATEDBYID', 'LASTMODIFIEDDATE', 'LASTMODIFIEDBYID','UPDATE_ME') order by column_id )
   loop
       cols := cols || ' custom_audit.audit_insert('''||rec2.column_name||''',:old.'||rec2.column_name||',:new.'||rec2.column_name||');'||chr(10);
   end loop;
@@ -232,8 +232,7 @@ begin
         ,  table_name
         ,  custom_audit.getTableAlias(owner,table_name) table_alias
     from all_tables x
-   where owner = 'LFPROD' and ( table_name like 'custom_T%' or table_name like 'custom_D%' )
-     and table_name not in ('T_GENDOC_REQUESTS')
+   where owner = 'LFPROD' and  table_name like 'DM%' and  table_name not like 'DM_TMP%'  and table_name not in ('DM_PLANNINGPERIODS','DM_PLANNINGPERIODS_H','DM_DELETEME')
      and exists ( select 1 from all_tab_cols where owner = x.owner and table_name = x.table_name and column_name = 'ID' ) 
       --and table_name = 'EXCHANGE_RATES'
      )
